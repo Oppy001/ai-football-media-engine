@@ -1,0 +1,36 @@
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# Credentials and private configuration
+credentials.json
+secrets.json
+*.key
+*.pem
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.log
+
+# Generated media
+*.mp4
+*.mp3
+*.wav
+*.webm
+
+# Node.js dependencies
+node_modules/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+
+# Local n8n data
+.n8n/
