@@ -6,7 +6,7 @@ The system automates the journey from discovering football content to analyzing 
 
 > **Portfolio Project:** Built to demonstrate advanced n8n workflow engineering, AI integration, media processing, API integration, and automation architecture.
 
-📸 *[Insert Screenshot of your n8n workflow here]*
+![AI Football Media Engine Workflow](screenshot/ai-football-media-engine.jpg)
 
 ## 🚀 What It Does
 
