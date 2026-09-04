@@ -1,0 +1,1075 @@
+{
+  "nodes": [
+    {
+      "parameters": {
+        "resource": "speech",
+        "voice": {
+          "__rl": true,
+          "value": "N2lVS1w4EtoT3dr4eOWO",
+          "mode": "list",
+          "cachedResultName": "Callum - Husky Trickster"
+        },
+        "text": "={{ $json.voiceover_script }}",
+        "additionalOptions": {},
+        "requestOptions": {}
+      },
+      "type": "@elevenlabs/n8n-nodes-elevenlabs.elevenLabs",
+      "typeVersion": 1,
+      "position": [
+        -5712,
+        864
+      ],
+      "id": "918ebdd4-1f7d-45a5-bc2e-4d3aaaff984a",
+      "name": "Convert text to speech",
+      "credentials": {
+        "elevenLabsApi": {
+          "id": "0vCBIJAMvNIbtUHT",
+          "name": "ElevenLabs account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "check-elislab",
+              "leftValue": "={{ $json.error }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Check - ElevenLab Failed?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -5488,
+        960
+      ],
+      "id": "171c7580-92f1-40f9-be40-3b002654ef31"
+    },
+    {
+      "parameters": {
+        "fileName": "={{ $('8. Parse Download Info').item.json.work_dir }}/{{ $('8. Parse Download Info').item.json.strategy.video_detail.video_id }}_voiceover.mp3",
+        "options": {}
+      },
+      "id": "c530fbdf-3168-441a-ac1d-e19859be5af1",
+      "name": "Save 11Labs Audio",
+      "type": "n8n-nodes-base.writeBinaryFile",
+      "typeVersion": 1,
+      "position": [
+        -5488,
+        768
+      ],
+      "notes": "Saves the audio from RAM to the hard drive"
+    },
+    {
+      "parameters": {
+        "command": "=#!/bin/bash\n\nFILE_PATH=\"{{ $('8. Parse Download Info').item.json.work_dir }}/{{ $('8. Parse Download Info').item.json.strategy.video_detail.video_id }}_voiceover.mp3\"\n\n# Extremely lightweight checks (zero CPU strain)\nFILE_SIZE=$(du -h \"$FILE_PATH\" | cut -f1)\nDURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"$FILE_PATH\" 2>/dev/null | cut -d'.' -f1)\n\n# Output exact same format as fallback script\necho \"VOICEOVER_DURATION:${DURATION}\"\necho \"VOICEOVER_SIZE:${FILE_SIZE}\"\necho \"PATH:${FILE_PATH}\""
+      },
+      "id": "4124ccce-1095-4e47-a8c5-88165895900d",
+      "name": "Verify 11Labs Audio",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -5264,
+        768
+      ],
+      "notes": "Lightweight duration check"
+    },
+    {
+      "parameters": {
+        "resource": "video",
+        "operation": "upload",
+        "title": "={{ $('11. Parse Final Video').item.json.strategy.youtube_seo.title }}",
+        "categoryId": "=17",
+        "options": {
+          "description": "={{ $('11. Parse Final Video').item.json.strategy.youtube_seo.description }}",
+          "privacyStatus": "public",
+          "tags": "={{ $('11. Parse Final Video').item.json.strategy.youtube_seo.tags.join(',')}}"
+        }
+      },
+      "type": "n8n-nodes-base.youTube",
+      "typeVersion": 1,
+      "position": [
+        -6352,
+        1552
+      ],
+      "id": "484f246b-f77e-4d8c-9255-c36953635da6",
+      "name": "Upload a video",
+      "retryOnFail": false,
+      "waitBetweenTries": 5000,
+      "credentials": {
+        "youTubeOAuth2Api": {
+          "id": "IdbW9tPJxCVOrWux",
+          "name": "YouTube account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "video_context",
+              "name": "video_context",
+              "value": "={{ {\n  title: $json.title,\n  video_url: $json.video_url,\n  video_id: $json.id,\n  reddit_url: $json.reddit_url,\n  source: $json.source_domain,\n  engagement: $json.engagement_score,\n  upvotes: $json.upvotes\n} }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b4d31fde-f1b3-4584-8093-ce28ce10e659",
+      "name": "4. Prepare Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.3,
+      "position": [
+        -5664,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -6448,
+        768
+      ],
+      "id": "0a618b2d-2291-473f-86ef-273acf0d3767",
+      "name": "Split Posts"
+    },
+    {
+      "parameters": {
+        "command": "=#!/bin/bash\nset -e\n\n# =============================================\n# VIDEO DOWNLOAD ENGINE - HIGH QUALITY\n# Supports Reddit, Streamable, Twitter, YouTube\n# =============================================\n\nVIDEO_URL=\"{{ $json.strategy.video_detail.video_url }}\"\nVIDEO_ID=\"{{ $json.strategy.video_detail.video_id }}\"\nREDDIT_URL=\"{{ $json.strategy.video_detail.reddit_url }}\"\nSOURCE_DOMAIN=\"{{ $json.strategy.video_detail.source_url }}\"\nWORK_DIR=\"/tmp/football_ai\"\n\nmkdir -p \"$WORK_DIR\"\ncd \"$WORK_DIR\"\n\necho \"=============================================\"\necho \"📥 VIDEO DOWNLOAD - HIGH QUALITY\"\necho \"=============================================\"\necho \"Video ID: ${VIDEO_ID}\"\necho \"Source: ${SOURCE_DOMAIN}\"\necho \"URL: ${VIDEO_URL}\"\necho \"=============================================\"\n\n\n# =============================================\n# DETERMINE DOWNLOAD STRATEGY\n# =============================================\n\nif [[ \"$VIDEO_URL\" == *\"v.redd.it\"* ]] || [[ \"$VIDEO_URL\" == *\"i.redd.it\"* ]]; then\n  echo \"✅ Reddit video detected\"\n  echo \"Using Reddit post URL for better quality...\"\n  DOWNLOAD_URL=\"$REDDIT_URL\"\nelse\n  echo \"✅ Standard video platform detected\"\n  DOWNLOAD_URL=\"$VIDEO_URL\"\nfi\n\necho \"Download URL: ${DOWNLOAD_URL}\"\necho \"\"\n\n\n# =============================================\n# DOWNLOAD VIDEO - BEST QUALITY\n# =============================================\n\necho \"⏳ Downloading highest quality...\"\n\n# Removed strict [ext] limits and User-Agent so it doesn't fail the HD stream\nyt-dlp \\\n  --format \"bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best\" \\\n  --merge-output-format mp4 \\\n  --output \"${VIDEO_ID}_original.%(ext)s\" \\\n  --no-playlist \\\n  --retries 3 \\\n  --fragment-retries 3 \\\n  --socket-timeout 60 \\\n  --no-check-certificates \\\n  \"$DOWNLOAD_URL\" 2>&1 || {\n    echo \"❌ ERROR: Download failed after 3 retries\"\n    echo \"URL: $DOWNLOAD_URL\"\n    exit 1\n  }\n\n\n# =============================================\n# FIND DOWNLOADED FILE\n# =============================================\n\nDOWNLOADED_FILE=$(ls -t ${VIDEO_ID}_original.* 2>/dev/null | head -1)\n\nif [ -z \"$DOWNLOADED_FILE\" ]; then\n  echo \"❌ ERROR: No file found after download\"\n  echo \"Expected pattern: ${VIDEO_ID}_original.*\"\n  ls -la \"$WORK_DIR\"\n  exit 1\nfi\n\necho \"✅ Downloaded: ${DOWNLOADED_FILE}\"\n\n\n# =============================================\n# CONVERT TO MP4 (IF NEEDED)\n# =============================================\n\nif [[ \"$DOWNLOADED_FILE\" != *.mp4 ]]; then\n  echo \"🔄 Converting to MP4...\"\n  \n  ffmpeg -i \"$DOWNLOADED_FILE\" \\\n    -c:v libx264 \\\n    -preset medium \\\n    -crf 18 \\\n    -c:a aac \\\n    -b:a 192k \\\n    -movflags +faststart \\\n    \"${VIDEO_ID}_original.mp4\" \\\n    -y \\\n    -loglevel error\n  \n  if [ $? -eq 0 ]; then\n    echo \"✅ Conversion complete\"\n    rm \"$DOWNLOADED_FILE\"\n  else\n    echo \"❌ ERROR: Conversion failed\"\n    exit 1\n  fi\nfi\n\n\n# =============================================\n# VERIFY FINAL FILE\n# =============================================\n\nFINAL_FILE=\"${VIDEO_ID}_original.mp4\"\n\nif [ ! -f \"$FINAL_FILE\" ]; then\n  echo \"❌ ERROR: Final MP4 not found: $FINAL_FILE\"\n  exit 1\nfi\n\n# Get file metadata\nFILE_SIZE=$(du -h \"$FINAL_FILE\" | cut -f1)\nDURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"$FINAL_FILE\" | cut -d'.' -f1)\nWIDTH=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 \"$FINAL_FILE\")\nHEIGHT=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 \"$FINAL_FILE\")\n\n\n# =============================================\n# SUCCESS OUTPUT\n# =============================================\n\necho \"\"\necho \"=============================================\"\necho \"✅ DOWNLOAD COMPLETE - HIGH QUALITY\"\necho \"=============================================\"\necho \"File: ${FINAL_FILE}\"\necho \"Size: ${FILE_SIZE}\"\necho \"Duration: ${DURATION}s\"\necho \"Resolution: ${WIDTH}x${HEIGHT}\"\necho \"Quality: Best Available (1080p max)\"\necho \"=============================================\"\n\necho \"DURATION:${DURATION}\"\necho \"FILE_SIZE:${FILE_SIZE}\"\necho \"RESOLUTION:${WIDTH}x${HEIGHT}\"\necho \"PATH:${WORK_DIR}/${FINAL_FILE}\""
+      },
+      "id": "ebd21536-61a8-4039-8d77-e563785efc83",
+      "name": "7. Download Video",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -6192,
+        784
+      ],
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput",
+      "notes": "Downloads video using yt-dlp from any platform"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =============================================\n// PARSE DOWNLOAD OUTPUT\n// Merge download info with Loop data\n// =============================================\n\nconst items = [];\n\nfor (const item of $input.all()) {\n  const output = item.json.stdout || '';\n  \n  // Parse download output\n  const durationMatch = output.match(/DURATION:(\\d+)/);\n  const fileSizeMatch = output.match(/FILE_SIZE:(\\S+)/);\n  const resolutionMatch = output.match(/RESOLUTION:(\\d+x\\d+)/);\n  const pathMatch = output.match(/PATH:(.+)/);\n  \n  const downloadedDuration = durationMatch ? parseInt(durationMatch[1]) : 60;\n  const fileSize = fileSizeMatch ? fileSizeMatch[1] : 'unknown';\n  const resolution = resolutionMatch ? resolutionMatch[1] : 'unknown';\n  const downloadedPath = pathMatch ? pathMatch[1].trim() : '';\n  \n  // ✅ THE FIX: Grab the data strictly tied to the CURRENT loop item\n  const node6Data = $('Split Posts').item.json;\n  \n  items.push({\n    json: {\n      // ✅ PASS ALL DATA FROM LOOP GATEKEEPER\n      ...node6Data,\n      \n      // ✅ ADD DOWNLOAD INFO\n      downloaded_path: downloadedPath,\n      downloaded_duration: downloadedDuration,\n      downloaded_file_size: fileSize,\n      downloaded_resolution: resolution,\n      work_dir: '/tmp/football_ai'\n    }\n  });\n}\n\nreturn items;"
+      },
+      "id": "39084cb0-e864-40f9-a4bd-8d1e0543daab",
+      "name": "8. Parse Download Info",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5968,
+        736
+      ],
+      "notes": "Extracts file path and duration from download output"
+    },
+    {
+      "parameters": {
+        "command": "=#!/bin/bash\nset -e\n\n# =============================================\n# VOICEOVER GENERATOR\n# Creates natural AI commentary using Edge-TTS\n# =============================================\n\nVIDEO_ID=\"{{ $('8. Parse Download Info').item.json.strategy.video_detail.video_id }}\"\nSCRIPT=\"{{ $('8. Parse Download Info').item.json.voiceover_script }}\"\nWORK_DIR=\"{{ $('8. Parse Download Info').item.json.work_dir }}\"\n\ncd \"$WORK_DIR\"\n\necho \"=============================================\"\necho \"🎤 VOICEOVER GENERATION\"\necho \"=============================================\"\necho \"Video ID: ${VIDEO_ID}\"\necho \"Script: ${SCRIPT}\"\necho \"Voice: en-US-GuyNeural\"\necho \"=============================================\"\n\n\n# =============================================\n# GENERATE VOICEOVER\n# =============================================\n\necho \"⏳ Generating voiceover...\"\n\nedge-tts \\\n  --voice \"en-US-GuyNeural\" \\\n  --text \"$SCRIPT\" \\\n  --write-media \"${VIDEO_ID}_voiceover.mp3\" \\\n  --rate \"+10%\" \\\n  --pitch \"+5Hz\" 2>&1\n\nif [ ! -f \"${VIDEO_ID}_voiceover.mp3\" ]; then\n  echo \"❌ ERROR: TTS generation failed\"\n  exit 1\nfi\n\n\n# =============================================\n# VERIFY OUTPUT\n# =============================================\n\nVOICEOVER_FILE=\"${VIDEO_ID}_voiceover.mp3\"\nFILE_SIZE=$(du -h \"$VOICEOVER_FILE\" | cut -f1)\nDURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"$VOICEOVER_FILE\" 2>/dev/null | cut -d'.' -f1)\n\n\n# =============================================\n# SUCCESS OUTPUT\n# =============================================\n\necho \"\"\necho \"=============================================\"\necho \"✅ VOICEOVER COMPLETE\"\necho \"=============================================\"\necho \"File: ${VOICEOVER_FILE}\"\necho \"Size: ${FILE_SIZE}\"\necho \"Duration: ${DURATION}s\"\necho \"Path: ${WORK_DIR}/${VOICEOVER_FILE}\"\necho \"=============================================\"\n\n# Output for n8n parsing\necho \"VOICEOVER_DURATION:${DURATION}\"\necho \"VOICEOVER_SIZE:${FILE_SIZE}\"\necho \"PATH:${WORK_DIR}/${VOICEOVER_FILE}\""
+      },
+      "id": "57703931-36bd-4906-bd0d-466f72fb21e5",
+      "name": "9. Generate Voiceover",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -5264,
+        960
+      ],
+      "notes": "Generates natural voiceover using Edge-TTS"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =============================================\n// PARSE VOICEOVER OUTPUT\n// Merge voiceover info with all previous data\n// =============================================\n\nconst items = [];\n\nfor (const item of $input.all()) {\n  const output = item.json.stdout || '';\n  \n  // Parse voiceover output\n  const durationMatch = output.match(/VOICEOVER_DURATION:(\\d+)/);\n  const sizeMatch = output.match(/VOICEOVER_SIZE:(\\S+)/);\n  const pathMatch = output.match(/PATH:(.+)/);\n  \n  const voiceoverDuration = durationMatch ? parseInt(durationMatch[1]) : 0;\n  const voiceoverSize = sizeMatch ? sizeMatch[1] : 'unknown';\n  const voiceoverPath = pathMatch ? pathMatch[1].trim() : '';\n  \n  // Get ALL data from Node 8 (which has everything)\n  const node8Data = $('8. Parse Download Info').item.json;\n  \n  items.push({\n    json: {\n      // ✅ PASS ALL DATA FROM NODE 8\n      ...node8Data,\n      \n      // ✅ ADD VOICEOVER INFO\n      voiceover_path: voiceoverPath,\n      voiceover_duration: voiceoverDuration,\n      voiceover_size: voiceoverSize,\n      voiceover_generated: true\n    }\n  });\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5040,
+        864
+      ],
+      "id": "d0879ed3-f6fb-42a2-b743-e0a1067a7ed4",
+      "name": "9B. Parse Voiceover Info"
+    },
+    {
+      "parameters": {
+        "command": "=#!/bin/bash\n\nMUSIC_DIR=\"/home/node/music\"\nOUTPUT_DIR=\"/tmp/football_ai\"\n\nRANDOM_NUM=$(( ( RANDOM % 5 ) + 1 ))\nRANDOM_TRACK=\"$MUSIC_DIR/music${RANDOM_NUM}.mp3\"\n\ncp \"$RANDOM_TRACK\" \"$OUTPUT_DIR/background_music.mp3\"\n\necho \"✅ Selected music: $RANDOM_TRACK\"\necho \"MUSIC_PATH:$OUTPUT_DIR/background_music.mp3\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -5008,
+        1088
+      ],
+      "id": "b4c8f949-faae-4eed-ba4a-b2ef6e219de9",
+      "name": "9C. Download Music"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\n\nfor (const item of $input.all()) {\n  // Get all data from 9B\n  const node9BData = $('9B. Parse Voiceover Info').item.json;\n  \n  items.push({\n    json: {\n      // Pass everything from 9B through\n      ...node9BData,\n      \n      // Add music info\n      music_path: '/tmp/football_ai/background_music.mp3'\n    }\n  });\n}\n\nreturn items;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -6400,
+        1312
+      ],
+      "id": "2898f313-823d-45f1-ac9d-924285aef9a7",
+      "name": "9D. Parse Music"
+    },
+    {
+      "parameters": {
+        "command": "=#!/bin/bash\nset -e\n\n# =============================================\n# MASTER VIDEO EDITOR - VIDEO PROCESSING PIPELINE (SEAMLESS)\n# =============================================\n\nVIDEO_ID=\"{{ $json.strategy.video_detail.video_id }}\"\nWORK_DIR=\"/tmp/football_ai\"\nINPUT_VIDEO=\"${WORK_DIR}/${VIDEO_ID}_original.mp4\"\nVOICEOVER=\"${WORK_DIR}/${VIDEO_ID}_voiceover.mp3\"\nOUTPUT_VIDEO=\"${WORK_DIR}/${VIDEO_ID}_final.mp4\"\n\nDURATION={{ $json.duration }}\nSTART_OFFSET={{ $json.start_offset }}\nTRANSFORM_LEVEL=\"{{ $json.transformation_level }}\"\nCAPTION=\"{{ $json.caption_video_safe }}\"\nRISK_SCORE={{ $json.risk_score }}\n\ncd \"$WORK_DIR\"\n\necho \"=============================================\"\necho \"🎬 VIDEO PROCESSING (GHOST ENGINE)\"\necho \"=============================================\"\necho \"Video ID: ${VIDEO_ID}\"\necho \"Start Offset: ${START_OFFSET}s\"\necho \"Transform: ${TRANSFORM_LEVEL} (Nuclear)\"\necho \"=============================================\"\n\n# Verify files exist\nif [ ! -f \"$INPUT_VIDEO\" ]; then\n  echo \"❌ ERROR: Input video not found: $INPUT_VIDEO\"\n  exit 1\nfi\n\nif [ ! -f \"$VOICEOVER\" ]; then\n  echo \"❌ ERROR: Voiceover not found: $VOICEOVER\"\n  exit 1\nfi\n\n\n# =============================================\n# STEP 1: THE SEAMLESS JAKOBSSON PUNCH-CUT\n# =============================================\n\necho \"⏳ Step 1: Chopping and resetting timestamps for seamless cuts...\"\n\n# Calculate precise offsets (Skipping just 0.2 seconds to prevent visual jarring)\nVIDEO_LENGTH=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"$INPUT_VIDEO\" | cut -d'.' -f1)\n\nO1=$START_OFFSET\nO2=$(awk \"BEGIN {print $START_OFFSET + ($VIDEO_LENGTH * 0.25)}\")\nO3=$(awk \"BEGIN {print $START_OFFSET + ($VIDEO_LENGTH * 0.50)}\")\nO4=$(awk \"BEGIN {print $START_OFFSET + ($VIDEO_LENGTH * 0.75)}\")\n# The mathematically perfect cut. This resets the Presentation Time Stamps (PTS) \n# so the video never freezes or pauses when stitched together.\nffmpeg -y -i \"$INPUT_VIDEO\" -filter_complex \\\n  \"[0:v]trim=start=${O1}:duration=4,setpts=PTS-STARTPTS[v1]; \\\n   [0:v]trim=start=${O2}:duration=4,setpts=PTS-STARTPTS[v2]; \\\n   [0:v]trim=start=${O3}:duration=4,setpts=PTS-STARTPTS[v3]; \\\n   [0:v]trim=start=${O4}:duration=4,setpts=PTS-STARTPTS[v4]; \\\n   [v1][v2][v3][v4]concat=n=4:v=1:a=0[vout]\" \\\n  -map \"[vout]\" -c:v libx264 -preset slow -crf 15 \"${VIDEO_ID}_trimmed.mp4\" -loglevel error\n\necho \"✅ Timestamps reset and sequence scrambled seamlessly\"\n\n\n# =============================================\n# STEP 2: CALCULATE DIMENSIONS\n# =============================================\n\nW=$(ffprobe -v error -select_streams v:0 -show_entries stream=width -of csv=p=0 \"${VIDEO_ID}_trimmed.mp4\")\nH=$(ffprobe -v error -select_streams v:0 -show_entries stream=height -of csv=p=0 \"${VIDEO_ID}_trimmed.mp4\")\n\n\n# =============================================\n# STEP 3: WORD-WRAP AND ESCAPE CAPTION\n# =============================================\n\nwrap_text() {\n    local text=\"$1\"\n    local max=30\n    local out=\"\"\n    local line=\"\"\n    for word in $text; do\n        if [ $((${#line} + ${#word})) -gt $max ]; then\n            [ -z \"$out\" ] && out=\"$line\" || out=\"${out}\\n${line}\"\n            line=\"$word \"\n        else\n            line=\"${line}${word} \"\n        fi\n    done\n    [ -n \"$line\" ] && { [ -z \"$out\" ] && out=\"$line\" || out=\"${out}\\n${line}\"; }\n    printf \"%s\" \"$out\" | sed 's/ $//g'\n}\n\nCAPTION_WRAPPED=$(wrap_text \"$CAPTION\")\nCAPTION_SAFE=$(printf \"%s\" \"$CAPTION_WRAPPED\" | sed \"s/'/'\\\\\\\\''/g\")\n\nBOX_Y=150\nTEXT_SIZE=38\n\n\n# =============================================\n# STEP 4: BUILD FILTER COMPLEX (ADVANCED VISUAL PROCESSING)\n# =============================================\n\nCOLOR=\"eq=contrast=1.15:brightness=-0.02:saturation=0.95:gamma=0.95\"\n\n# THE VIDEO TRANSFORMATION ENGINE\nFILTER_COMPLEX=\"[0:v]split=2[bg][fg];[bg]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,boxblur=40:5,eq=brightness=-0.3[bg_blurred];[fg]hflip,crop=iw*0.96:ih*0.96,rotate=0.02:c=black@0,fps=23.976,scale=1080:1920:force_original_aspect_ratio=decrease:flags=lanczos,${COLOR},hue=H=0.05,noise=alls=2:allf=t+u,vignette=a=PI/6[fg_scaled];[bg_blurred][fg_scaled]overlay=(W-w)/2:(H-h)/2[merged];[merged]drawtext=fontfile=/usr/share/fonts/ttf-dejavu/DejaVuSans-Bold.ttf:text='${CAPTION_SAFE}':fontcolor=#F0F0F0:fontsize=${TEXT_SIZE}:box=1:boxcolor=black@0.3:boxborderw=20:line_spacing=10:borderw=3:bordercolor=black:x=(w-text_w)/2:y=${BOX_Y}[vout]\"\n\n\n# =============================================\n# STEP 5: APPLY TRANSFORMATIONS (VIDEO ONLY)\n# =============================================\n\necho \"⏳ Step 2: Applying Nuclear Visual Filters...\"\n\nffmpeg -y -i \"${VIDEO_ID}_trimmed.mp4\" \\\n  -filter_complex \"$FILTER_COMPLEX\" \\\n  -map \"[vout]\" \\\n  -c:v libx264 -preset slow -crf 13 -b:v 12000k -maxrate 15000k -bufsize 24000k -r 60 -profile:v high -level 4.2 -pix_fmt yuv420p \\\n  -an \\\n  \"${VIDEO_ID}_processed.mp4\" -loglevel error\n\nif [ ! -f \"${VIDEO_ID}_processed.mp4\" ]; then\n  echo \"❌ ERROR: FFmpeg processing failed.\"\n  exit 1\nfi\n\necho \"✅ Transformations applied\"\n\n\n# =============================================\n# STEP 6: AUDIO ANNIHILATION & VOICEOVER MERGE\n# =============================================\n\necho \"⏳ Step 3: Deleting original audio & injecting AI Voice + Noise...\"\n\nVIDEO_DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"${VIDEO_ID}_processed.mp4\" 2>/dev/null)\nVOICEOVER_DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"$VOICEOVER\" 2>/dev/null)\n\necho \"   Video: ${VIDEO_DURATION}s | Voiceover: ${VOICEOVER_DURATION}s\"\n\nffmpeg -y -i \"${VIDEO_ID}_processed.mp4\" -i \"$VOICEOVER\" \\\n  -i \"/tmp/football_ai/background_music.mp3\" \\\n  -filter_complex \"[1:a]volume=1.0,apad[vo];[2:a]volume=0.3,aloop=loop=-1:size=2e+09,atrim=duration=${VIDEO_DURATION}[music];[vo][music]amix=inputs=2:duration=first,loudnorm=I=-16:TP=-1.5:LRA=11[aout]\" \\\n  -map 0:v -map \"[aout]\" \\\n  -c:v copy -c:a aac -b:a 192k \\\n  -shortest \\\n  \"$OUTPUT_VIDEO\" \\\n  -loglevel error\n\necho \"✅ Ghost audio track locked\"\n\n\n# =============================================\n# STEP 7: STRIP METADATA\n# =============================================\n\necho \"⏳ Step 4: Stripping metadata...\"\n\nffmpeg -y -i \"$OUTPUT_VIDEO\" \\\n  -map_metadata -1 \\\n  -c copy \\\n  \"${VIDEO_ID}_clean.mp4\" \\\n  -loglevel error\n\nmv \"${VIDEO_ID}_clean.mp4\" \"$OUTPUT_VIDEO\"\n\necho \"✅ Metadata stripped\"\n\n\n# =============================================\n# CLEANUP\n# =============================================\n\nrm -f \"${VIDEO_ID}_trimmed.mp4\" \\\n      \"${VIDEO_ID}_processed.mp4\" \\\n      \"${VIDEO_ID}_original.mp4\" \\\n      \"${VIDEO_ID}_voiceover.mp3\"\n\n\n# =============================================\n# FINAL OUTPUT\n# =============================================\n\nFILE_SIZE=$(du -h \"$OUTPUT_VIDEO\" | cut -f1)\nFINAL_DURATION=$(ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 \"$OUTPUT_VIDEO\" | cut -d'.' -f1)\n\necho \"\"\necho \"=============================================\"\necho \"✅ GHOST PROTOCOL COMPLETE\"\necho \"=============================================\"\necho \"Output: ${OUTPUT_VIDEO}\"\necho \"Size: ${FILE_SIZE}\"\necho \"Duration: ${FINAL_DURATION}s\"\necho \"=============================================\"\n\necho \"PATH:${OUTPUT_VIDEO}\"\necho \"SIZE:${FILE_SIZE}\"\necho \"FINAL_DURATION:${FINAL_DURATION}\""
+      },
+      "id": "99a64751-d7b3-4ff8-a8a5-76e1e0b917de",
+      "name": "10. Master Video Editor",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -6176,
+        1312
+      ],
+      "notes": "Applies all video enhancement transformations: mirror, crop, speed, zoom, captions, voiceover"
+    },
+    {
+      "parameters": {
+        "amount": 3
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -5952,
+        1312
+      ],
+      "id": "5c076ca9-213d-4df7-a6ba-a3aedd2b147f",
+      "name": "Waiting for video editor",
+      "webhookId": "c3134c2f-f560-4b0a-b9ab-333ccd9e8626"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =============================================\n// PARSE FINAL VIDEO INFO\n// Extract final video details for upload\n// =============================================\n\nconst items = [];\n\nfor (const item of $input.all()) {\n  const output = item.json.stdout || '';\n  \n  // Extract path and size from output\n  const pathMatch = output.match(/PATH:(.+)/);\n  const sizeMatch = output.match(/SIZE:(.+)/);\n  \n  const finalPath = pathMatch ? pathMatch[1].trim() : '';\n  const fileSize = sizeMatch ? sizeMatch[1].trim() : '';\n  \n  // Get ALL data from Node 9B (which has everything including risk_score)\n  const node9BData = $('9D. Parse Music').item.json;\n  \n  items.push({\n    json: {\n      ...node9BData,  // ← This brings ALL previous data including risk_score\n      final_video_path: finalPath,\n      final_video_size: fileSize,\n      ready_for_upload: true,\n      processed_at: new Date().toISOString()\n    }\n  });\n}\n\nreturn items;"
+      },
+      "id": "2f55e585-a3c1-4bc6-a584-c9007c163eb8",
+      "name": "11. Parse Final Video",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5728,
+        1312
+      ],
+      "notes": "Extracts final video path and metadata"
+    },
+    {
+      "parameters": {
+        "command": "=#!/bin/bash\n\nLOG_FILE=\"/home/node/posted_videos.txt\"\nVIDEO_ID=\"{{ $json.strategy.video_detail.video_id }}\"\n\n# Create log file if it doesn't exist\ntouch \"$LOG_FILE\"\n\n# Write video ID to log file\necho \"$VIDEO_ID\" >> \"$LOG_FILE\"\n\necho \"✅ Logged posted video: $VIDEO_ID\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -5504,
+        1312
+      ],
+      "id": "74a34e94-7f8a-4e11-96a0-f6f52ce44c03",
+      "name": "Log Posted Video"
+    },
+    {
+      "parameters": {
+        "fileSelector": "=/tmp/football_ai/{{ $json.strategy.video_detail.video_id }}_final.mp4",
+        "options": {
+          "dataPropertyName": "data"
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -5056,
+        1312
+      ],
+      "id": "8567f8fe-1fac-4c3e-bc76-0e9a308de125",
+      "name": "Read/Write Files from Disk2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const node11Data = $('11. Parse Final Video').item.json;\n\nreturn [{\n  json: {\n    ...node11Data\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5280,
+        1312
+      ],
+      "id": "4280cf4b-2c0e-4087-acf4-14344147d65c",
+      "name": "Passing Through"
+    },
+    {
+      "parameters": {
+        "jsCode": "for (const item of $input.all()) {\n  if (item.binary && item.binary.data) {\n    item.binary.data.mimeType = 'video/mp4';\n  }\n}\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -4832,
+        1312
+      ],
+      "id": "5f94a09c-db28-4ffc-88fd-51c483bf6c2a",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "amount": 1,
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -6128,
+        1552
+      ],
+      "id": "1c2e79ff-3e6f-4b96-b916-f29fe78fddb6",
+      "name": "YouTube Wait",
+      "webhookId": "7133d01a-027a-4df1-b700-5623ad9f6b39"
+    },
+    {
+      "parameters": {
+        "command": "=# =============================================\n# 0. CREDENTIALS (REPLACE THESE WITH YOURS!)\n# =============================================\nPAGE_ID=\"REPLACE WITH YOUR PAGE ID\"\nACCESS_TOKEN=\"REPLACE WITH YOUR ACCESS \"\n\n# 1. Grab data from your n8n workflow\nVIDEO_ID=\"{{ $('11. Parse Final Video').item.json.strategy.video_detail.video_id }}\"\nCAPTION_LONG=\"{{ $('11. Parse Final Video').item.json.strategy.captions.long }}\"\n\n# 2. Grab hashtags (Make sure the JSON path matches what your AI outputs!)\nHASHTAGS=\"{{ $('11. Parse Final Video').item.json.strategy.hashtags }}\" \n\n# 3. Safely combine the Caption and Hashtags with a double line break\nFULL_DESCRIPTION=$(printf \"%s\\n\\n%s\" \"$CAPTION_LONG\" \"$HASHTAGS\")\n\n# 4. Set up file paths\nWORK_DIR=\"/tmp/football_ai\"\nFILE_PATH=\"${WORK_DIR}/${VIDEO_ID}_final.mp4\"\n\necho \"=============================================\"\necho \"🚀 INITIATING FACEBOOK REEL UPLOAD\"\necho \"=============================================\"\n\nif [ ! -f \"$FILE_PATH\" ]; then\n  echo \"❌ ERROR: Final video not found at $FILE_PATH\"\n  exit 1\nfi\n\nFILE_SIZE=$(stat -c%s \"$FILE_PATH\")\necho \"File Size: $FILE_SIZE bytes\"\n\n\n# =============================================\n# STEP 1: INITIALIZE UPLOAD\n# =============================================\necho \"⏳ Step 1: Requesting secure upload URL from Meta...\"\n\nINIT_RES=$(curl -s -X POST \"https://graph.facebook.com/v19.0/${PAGE_ID}/video_reels\" \\\n  -d \"upload_phase=start\" \\\n  -d \"access_token=${ACCESS_TOKEN}\")\n\n# Extract the video_id and upload_url from Facebook's JSON response\nFB_VIDEO_ID=$(echo \"$INIT_RES\" | grep -o '\"video_id\":\"[^\"]*' | cut -d'\"' -f4)\nUPLOAD_URL=$(echo \"$INIT_RES\" | grep -o '\"upload_url\":\"[^\"]*' | cut -d'\"' -f4 | sed 's/\\\\//g')\n\nif [ -z \"$FB_VIDEO_ID\" ] || [ -z \"$UPLOAD_URL\" ]; then\n  echo \"❌ ERROR: Failed to initialize upload. Check your Access Token.\"\n  echo \"Facebook Response: $INIT_RES\"\n  exit 1\nfi\n\necho \"✅ Upload initialized. FB Video ID: $FB_VIDEO_ID\"\n\n\n# =============================================\n# STEP 2: UPLOAD THE MP4 FILE\n# =============================================\necho \"⏳ Step 2: Uploading video file (This may take a minute)...\"\n\nUPLOAD_RES=$(curl -s -X POST \"$UPLOAD_URL\" \\\n  -H \"Authorization: OAuth ${ACCESS_TOKEN}\" \\\n  -H \"offset: 0\" \\\n  -H \"file_size: ${FILE_SIZE}\" \\\n  -F \"video_file_chunk=@${FILE_PATH}\")\n\n# Facebook should return {\"success\":true}\nIS_SUCCESS=$(echo \"$UPLOAD_RES\" | grep -o '\"success\":true')\n\nif [ -z \"$IS_SUCCESS\" ]; then\n  echo \"❌ ERROR: Video file upload failed.\"\n  echo \"Facebook Response: $UPLOAD_RES\"\n  exit 1\nfi\n\necho \"✅ Video file uploaded successfully.\"\n\n\n# =============================================\n# STEP 3: PUBLISH THE REEL\n# =============================================\necho \"⏳ Step 3: Publishing Reel with AI Caption & Hashtags...\"\n\nPUBLISH_RES=$(curl -s -X POST \"https://graph.facebook.com/v19.0/${PAGE_ID}/video_reels\" \\\n  --data-urlencode \"upload_phase=finish\" \\\n  --data-urlencode \"access_token=${ACCESS_TOKEN}\" \\\n  --data-urlencode \"video_id=${FB_VIDEO_ID}\" \\\n  --data-urlencode \"video_state=PUBLISHED\" \\\n  --data-urlencode \"description=${FULL_DESCRIPTION}\")\n\nIS_PUBLISHED=$(echo \"$PUBLISH_RES\" | grep -o '\"success\":true')\n\nif [ -z \"$IS_PUBLISHED\" ]; then\n  echo \"❌ ERROR: Failed to publish the Reel.\"\n  echo \"Facebook Response: $PUBLISH_RES\"\n  exit 1\nfi\n\necho \"\"\necho \"=============================================\"\necho \"🎉 SUCCESS! REEL IS LIVE ON FACEBOOK\"\necho \"=============================================\"\necho \"Facebook Video ID: $FB_VIDEO_ID\"\necho \"Passing file intact to the next node in n8n...\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -5904,
+        1552
+      ],
+      "id": "015afcf6-6b02-48e3-a1f6-d616c76db7ae",
+      "name": "Facebook Auto-Poster",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "amount": 1,
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -5680,
+        1552
+      ],
+      "id": "1fcbd9c7-2986-40ca-a936-89a31b138870",
+      "name": "Wait3",
+      "webhookId": "7133d01a-027a-4df1-b700-5623ad9f6b39"
+    },
+    {
+      "parameters": {
+        "operation": "limit",
+        "maxItems": 4
+      },
+      "id": "d3aa3099-fabd-40ce-b26d-1202b51fc6fe",
+      "name": "Grab Top 3",
+      "type": "n8n-nodes-base.itemLists",
+      "typeVersion": 3,
+      "position": [
+        -5888,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.error }}",
+              "operation": "isEmpty"
+            }
+          ]
+        }
+      },
+      "id": "61c6944f-9d26-420b-b20f-f814f03748fc",
+      "name": "Download Success?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -5968,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ JSON.stringify($json.video_context) }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "You are an elite football content analyst and viral video strategist.\n\n## YOUR MISSION\nAnalyze this Reddit post about a football moment and make CRITICAL DECISIONS about how to edit it for maximum virality while minimizing copyright risk.\n\n## INPUT DATA\nYou will receive:\n- title: The Reddit post title (describes what happened)\n- source: The video hosting domain\n- engagement: Reddit engagement score (upvotes + comments)\n- upvotes: Number of upvotes\n\n## YOUR ANALYSIS TASKS\n\n### 1. CONTENT TYPE CLASSIFICATION\nClassify this into ONE category:\n- \"quick_goal\" = Tap-in, penalty, simple finish (needs 8-12 seconds)\n- \"buildup_goal\" = Team play, counter-attack, needs context (needs 18-25 seconds)\n- \"skill_move\" = Dribbling, nutmeg, skill sequence (needs 15-20 seconds)\n- \"save\" = Goalkeeper save (needs 8-12 seconds)\n- \"miss\" = Clear chance missed (needs 8-12 seconds)\n- \"red_card\" = Foul or controversy (needs 12-18 seconds)\n- \"celebration\" = Focus on celebration (needs 8-10 seconds)\n\n### 2. OPTIMAL CLIP DURATION\nBased on content type, decide the IDEAL duration in seconds.\nRules:\n- Quick moments: 8-12 seconds (safer, punchier)\n- Complex sequences: 18-25 seconds (more engaging, higher risk)\n- Balance viral potential vs copyright risk\n\n### 3. RISK ASSESSMENT\nCalculate copyright risk score (0-100):\n- High engagement (>5000) = +20 risk (rights holders monitor these)\n- Long duration (>20s) = +15 risk\n- Broadcast source (Sky, BT Sport, ESPN in title) = +25 risk\n- Twitter/Dubz source = +10 risk (often has broadcast audio)\n- Streamable/Streamja = +5 risk (usually safer)\n\n### 4. TRANSFORMATION REQUIREMENTS\nBased on risk score:\n- LOW (0-30): Standard transformation (mirror + crop + speed 1.05x)\n- MEDIUM (31-60): Heavy transformation (mirror + crop + speed 1.08x + pitch shift + color grade)\n- HIGH (61-100): MAXIMUM transformation (all above + aggressive zoom + saturation boost + backup account flag)\n\n### 5. VIRAL CAPTION GENERATION (FOR FFMPEG & FACEBOOK)\nCreate TWO standard captions:\na) SHORT (60-80 chars): Punchy, emoji-heavy. (FFmpeg will automatically strip emojis from this to burn it onto the video).\nb) LONG (100-150 chars): More context, used for Facebook/Instagram descriptions.\nRules for standard captions:\n- Use 2-3 relevant emojis (⚽🔥💨🚀⭐💥👑🎯)\n- Only include player name if clearly stated in the Reddit title\n- Never mention which club or team a player plays for\n- Only describe the action — never assume club affiliations\n- Create FOMO (\"You HAVE to see this\", \"No way he did that\")\n- Avoid claiming \"best ever\" or unverifiable facts\n- Match the emotion: excitement for goals, shock for misses\n\n### 6. YOUTUBE SHORTS SEO (STRICT ALGORITHM RULES)\nYou must generate a separate, highly optimized Title and Description specifically for YouTube Shorts.\n\nTITLE RULES:\n- The first TWO words MUST be strictly in ALL CAPS.\n- End with a single relevant emoji.\n- MUST include exactly ONE hashtag at the very end: #shorts.\n- Example: \"MESSI MAGIC saves the match! 🤯 #shorts\"\n\nDESCRIPTION RULES:\n- Section 1: Write a single, punchy sentence summarizing the video.\n- Section 2: Write exactly 5 to 6 SEO keywords relevant to the action. You MUST use the literal characters \"\\n\" after every single comma to force them to stack vertically. (e.g., keyword1,\\nkeyword2,\\nkeyword3).\n- Section 3: Write exactly 4 to 5 space-separated hashtags on ONE horizontal line (e.g., #shorts #viralshorts #football #soccer).\n- FORMATTING: You MUST use the literal characters \"\\n\\n\" inside the JSON string to separate Section 1, Section 2, and Section 3. Do not use physical line breaks.\n- HIDDEN TAGS: Generate an array of 5 to 7 backend tags. The first two MUST be \"shorts\" and \"viral shorts\". The last one MUST be a placeholder for the channel name: \"Football Code\". The rest should be relevant keywords. Do NOT use hashtags (#) in these tags.\n\n### 7. VOICEOVER SCRIPT (CRITICAL ALGORITHM HACKS)\nYou are a highly energetic, slightly controversial football pundit. Write a 15-25 word voiceover script that strictly follows these rules:\n- THE HOOK (First 3 seconds): Must start with a bold claim, a controversial question, or focus on disrespect.\n- THE MEAT: Describe the physical action happening on the pitch in present tense. Make it sound fast and high-impact.\n- THE BAIT (Ending): End with a short, polarizing question that forces viewers to argue in the comments. \n- CRITICAL RULE FOR THE BAIT: The question MUST be based ONLY on the actual events in the video. Do NOT invent events, red cards, or fouls that didn't happen. If it is a save, debate the save. If it is a goal, debate the goal.\n- CONSTRAINTS: \n  - NEVER use cliches (\"absolutely brilliant\", \"world class\", \"magical\", \"YO!\", \"BRO\").\n  - NEVER mention or assume which club or team anyone plays for.\n  - ONLY describe the action implied by the title.\n\n### 8. GENERAL HASHTAG STRATEGY (FOR TIKTOK/FACEBOOK)\nGenerate a JSON array of 5 hashtags for non-YouTube platforms:\n- 2 broad (#football, #soccer, #goal)\n- 2 specific (#PremierLeague, #ChampionsLeague, #Bundesliga)\n- 1 viral (#fyp, #viral, #trending)\n- CRITICAL: NEVER use #shorts in this array.\n\n### 9. EDITING INSTRUCTIONS\nProvide specific FFmpeg instructions:\n- start_offset: How many seconds to skip from video start (usually 0-5)\n- focus_moment: When the \"money shot\" happens (for zoom trigger)\n- slow_motion_start: If applicable, when to apply 0.5x speed\n- slow_motion_duration: How long the slow-mo should last\n\n### 10. POSTING STRATEGY\nRecommend:\n- primary_account: Use main account (risk <50) or backup (risk >50)\n- best_platforms: Which platforms to prioritize (TikTok, Instagram, YouTube, Facebook)\n- post_timing: \"immediate\" (trending now) or \"delay_2h\" (wait for more engagement data)\n\n## OUTPUT FORMAT (RETURN VALID JSON ONLY)\n\n{\n  \"content_type\": \"buildup_goal\",\n  \"optimal_duration\": 22,\n  \"risk_score\": 45,\n  \"risk_level\": \"MEDIUM\",\n  \"transformation_level\": \"heavy\",\n  \n  \"captions\": {\n    \"short\": \"🚨 GARNACHO JUST DID THAT 🔥💨\",\n    \"long\": \"What a moment! An outrageous bicycle kick that has everyone going CRAZY! ⚽🔥\"\n  },\n\n \"youtube_seo\": {\n    \"title\": \"ABSOLUTE AUDACITY from Garnacho! 🤯 #shorts\",\n    \"description\": \"What a moment! An outrageous bicycle kick that has everyone going crazy.\\n\\nbicycle kick,\\ninsane goal,\\nfootball highlights,\\nsoccer skills,\\ntop corner\\n\\n#shorts #viralshorts #premierleague #football #goal\", \n    \"tags\": [\"shorts\", \"viral shorts\", \"bicycle kick\", \"manchester united\", \"football highlights\", \"Football Code\"]\n  }\n  \n  \"voiceover_script\": \"Is this the most disrespectful bicycle kick of the decade? Look at the absolute audacity to even attempt this in the box. Who actually did it better, him or Zlatan?\",\n  \n  \"hashtags\": [\"#shorts\", \"#viralshorts\", \"#football\", \"#soccer\", \"#goal\"],\n  \n  \"editing\": {\n    \"start_offset\": 2,\n    \"focus_moment\": 8,\n    \"slow_motion_start\": 7,\n    \"slow_motion_duration\": 3,\n    \"zoom_intensity\": \"medium\",\n    \"caption_position\": \"top\"\n  },\n  \n  \"posting_strategy\": {\n    \"primary_account\": true,\n    \"best_platforms\": [\"tiktok\", \"instagram\", \"facebook\", \"youtube\"],\n    \"post_timing\": \"immediate\",\n    \"expected_engagement\": \"high\"\n  },\n\n  \"video_detail\": {\n    \"video_url\": \"\",\n    \"video_id\": \"\",\n    \"reddit_url\": \"\",\n    \"source_url\": \"\"\n  },\n\n  \"reasoning\": \"High-engagement bicycle kick goal. Added YouTube SEO data.\"\n}\n\n## CRITICAL RULES\n1. ALWAYS return valid JSON - no markdown, no extra text\n2. Be realistic about risk - high engagement = higher risk\n3. Shorter clips are ALWAYS safer when in doubt\n4. Voiceover must sound natural, not scripted\n5. Never make up player names if not in the Reddit title\n6. Never mention club affiliations - only describe the action\n7. Never assume which team a player currently plays for\n8. Only use information clearly stated in the Reddit post title\n9. Consider that this will be posted within 3 hours of the match\n\nAnalyze the input and return your strategic decision."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        -6992,
+        640
+      ],
+      "id": "228b31c5-f583-4288-8af3-8056b1d36c85",
+      "name": "5. AI Strategist Agent"
+    },
+    {
+      "parameters": {
+        "command": "=stat -c%s \"/tmp/football_ai/{{ $('11. Parse Final Video').item.json.strategy.video_detail.video_id }}_final.mp4\" | tr -d '\\n'"
+      },
+      "name": "🎵 TikTok - Get Byte Size",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -5456,
+        1552
+      ],
+      "id": "d028b550-ccd7-46ef-aadc-6498cef1be2a"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://open.tiktokapis.com/v2/post/publish/video/init/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json; charset=UTF-8"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"post_info\": {\n    \"title\": \"{{ $('11. Parse Final Video').item.json.strategy.captions.short }} {{ $('11. Parse Final Video').item.json.strategy.hashtags }}\",\n    \"privacy_level\": \"PUBLIC_TO_EVERYONE\",\n    \"disable_comment\": false,\n    \"disable_duet\": false,\n    \"disable_stitch\": false\n  },\n  \"source_info\": {\n    \"source\": \"FILE_UPLOAD\",\n    \"video_size\": {{ parseInt($json.stdout) }},\n    \"chunk_size\": {{ parseInt($json.stdout) }},\n    \"total_chunk_count\": 1\n  }\n}",
+        "options": {}
+      },
+      "name": "🎵 TikTok - Init Upload",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -5232,
+        1552
+      ],
+      "id": "43d1b661-3c1f-4825-aed2-f3885711caf6",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "s2sWMNvxyi6VjdMl",
+          "name": "TikTok Account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "=UPLOAD_URL=\"{{ $json.data.upload_url }}\"\nFILE_PATH=\"/tmp/football_ai/{{ $('11. Parse Final Video').item.json.strategy.video_detail.video_id }}_final.mp4\"\nFILE_SIZE={{ $('🎵 TikTok - Get Byte Size').item.json.stdout }}\nMAX_BYTE=$((FILE_SIZE - 1))\n\necho \"🚀 Streaming file cleanly from disk storage directly to TikTok API...\"\n\ncurl -i -X PUT \"$UPLOAD_URL\" \\\n  -H \"Content-Type: video/mp4\" \\\n  -H \"Content-Length: $FILE_SIZE\" \\\n  -H \"Content-Range: bytes 0-$MAX_BYTE/$FILE_SIZE\" \\\n  --data-binary \"@$FILE_PATH\""
+      },
+      "name": "🎵 TikTok - Shell Streamer",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -5008,
+        1552
+      ],
+      "id": "a3b4bafd-3340-4d61-b333-ced6be756d0d"
+    },
+    {
+      "parameters": {
+        "amount": 1,
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -4784,
+        1552
+      ],
+      "id": "1e9a251f-822a-4cb6-a1c0-f03c3af29ab0",
+      "name": "Wait",
+      "webhookId": "7133d01a-027a-4df1-b700-5623ad9f6b39"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 3
+            }
+          ]
+        }
+      },
+      "id": "2af57cf0-f582-4853-b728-33773aae918e",
+      "name": "1. Schedule (Every 3 Hours)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -7008,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.reddit.com/r/soccer/top.rss?t=day",
+        "options": {}
+      },
+      "id": "2429a0bf-0a21-4c89-a381-fd222e4ed053",
+      "name": "1A. Reddit RSS (Free)",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        -6784,
+        368
+      ],
+      "notes": "Pulls directly from Reddit natively. Zero API keys needed."
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = [];\n\n// 1. ALL TARGET KEYWORDS\nconst targetKeywords = [\n  'goal', 'goals', 'highlight', 'skill', 'assist',\n  'save', 'miss', 'red card', 'penalty', 'free kick',\n  'volley', 'bicycle', 'solo', 'banger', 'screamer',\n  'tackle', 'amazing', 'insane', 'great'\n];\n\n// 2. ALL NEGATIVE KEYWORDS (Including the direct quote blocker '\"')\nconst negativeKeywords = [\n  'interview', 'interviewer', 'press conference', 'quotes', \n  'quote', 'speaks', 'says', 'podcast', 'statement', 'announced',\n  '\"', 'fabrizio', 'romano', 'ornstein', 'here we go', 'official',\n  'news', 'rumour', 'agreed', 'signing', 'medical', 'contract'\n];\n\n// 3. FULL VIP WHITELIST\nconst allowedVideoSources = [\n  'streamable', 'dubz', 'x.com', 'twitter.com', 'tiktok.com', \n  'facebook.com', 'youtube.com', 'youtu.be', 'instagram.com', \n  'fb.watch', 'v.redd.it'\n];\n\nfor (const item of $input.all()) {\n  const title = (item.json.title || '').toLowerCase();\n  \n  // RSS puts the Reddit post URL in 'link', and the HTML body in 'content'\n  const postLink = (item.json.link || '').toLowerCase();\n  const content = (item.json.content || '').toLowerCase();\n\n  // THE INTERVIEW BOUNCER\n  const isQuoteOrInterview = negativeKeywords.some(keyword => title.includes(keyword));\n  if (isQuoteOrInterview) {\n    continue;\n  }\n\n  // THE WHITELIST BOUNCER (Checks both the URL and the embedded content for VIP domains)\n  const isWhitelisted = allowedVideoSources.some(source => postLink.includes(source) || content.includes(source));\n  if (!isWhitelisted) {\n    continue; \n  }\n\n  // THE ACTION CHECK (Keywords OR the [1] - 0 bracket format)\n  const hasKeyword = targetKeywords.some(keyword => title.includes(keyword));\n  const hasGoalFormat = /\\[\\d+\\]\\s*-\\s*\\d+|\\d+\\s*-\\s*\\[\\d+\\]/.test(title);\n  const isTargetContent = hasKeyword || hasGoalFormat;\n\n  if (isTargetContent) {\n    // Extract video ID safely from the Reddit URL\n    const videoId = item.json.link.split('/comments/')[1]?.split('/')[0] || 'reddit_' + Math.random().toString(36).substring(7);\n    \n    items.push({\n      json: {\n        id: videoId,           \n        video_id: videoId,\n        title: item.json.title,\n        reddit_url: item.json.link,\n        video_url: item.json.link,   \n        source_domain: \"reddit\",\n        engagement_score: 2500, // Hardcoded fallback for AI processing\n        upvotes: 1000,          // Hardcoded fallback for AI processing\n        published_at: item.json.pubDate\n      }\n    });\n  }\n}\n\n// Limit to top 3 to prevent server overload\nreturn items.slice(0, 2);"
+      },
+      "id": "188f7202-cbea-401c-997f-42becad1e7b0",
+      "name": "2. Filter Reddit RSS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -6560,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "command": "=#!/bin/bash\n\nLOG_FILE=\"/home/node/posted_videos.txt\"\n\n# Create log file if it doesn't exist\ntouch \"$LOG_FILE\"\n\n# Get all incoming video IDs and check against log\nNEW_IDS=\"\"\nfor ID in {{ $input.all().map(item => item.json.id).join(' ') }}; do\n  if grep -q \"^${ID}$\" \"$LOG_FILE\"; then\n    echo \"⏭️ Skipping duplicate: ${ID}\"\n  else\n    echo \"✅ New video: ${ID}\"\n    NEW_IDS=\"${NEW_IDS} ${ID}\"\n  fi\ndone\n\nif [ -z \"$NEW_IDS\" ]; then\n  echo \"❌ No new videos found\"\n  exit 0\nfi\n\necho \"NEW_IDS:${NEW_IDS}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -6336,
+        368
+      ],
+      "id": "b7884572-72e1-4bd6-9aa7-5c5b792c23e1",
+      "name": "Check Duplicates"
+    },
+    {
+      "parameters": {
+        "jsCode": "const output = $input.first().json.stdout || '';\n\n// Extract new IDs from output\nconst newIdsLine = output.match(/NEW_IDS:(.+)/);\n\nif (!newIdsLine) {\n  throw new Error('No new videos found - all already posted');\n}\n\nconst newIds = newIdsLine[1].trim().split(' ').filter(Boolean);\n\nconsole.log('New IDs found:', newIds);\n\n// Get all items from Filter Football Posts node\nconst allItems = $('2. Filter Reddit RSS').all();\n\nconsole.log('Total items from filter:', allItems.length);\n\n// Filter to only new videos\nconst filteredItems = allItems.filter(item => \n  newIds.includes(item.json.id)\n);\n\nconsole.log('Filtered items:', filteredItems.length);\n\nif (filteredItems.length === 0) {\n  throw new Error('No new videos found after filtering');\n}\n\nreturn filteredItems;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -6112,
+        368
+      ],
+      "id": "8275d48f-4f84-48ce-8e23-4506c9df4a19",
+      "name": "Filter Items"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =============================================\n// PARSE AI STRATEGIST OUTPUT (STRICT QUALITY CONTROL)\n// Extracts, cleans, and validates all strategic decisions\n// =============================================\n\nconst items = [];\n\nfor (const item of $input.all()) {\n  try {\n    // 1. Get the AI output text\n    let responseText = item.json.output || '';\n    \n    // 2. Remove markdown code blocks if the AI accidentally adds them\n    responseText = responseText.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n    \n    // 3. Parse the JSON\n    const strategy = JSON.parse(responseText);\n    \n    // 4. VALIDATION: Ensure all critical fields exist (including youtube_seo)\n    if (!strategy.content_type || !strategy.optimal_duration || !strategy.captions || !strategy.voiceover_script || !strategy.youtube_seo) {\n      throw new Error('AI missing critical fields (Failed quality check)');\n    }\n    \n    items.push({\n      json: {\n        // ✅ PRESERVE ORIGINAL VIDEO METADATA\n        video_id: item.json.video_id || item.json.id,\n        title: item.json.title,\n        video_url: item.json.video_url,\n        reddit_url: item.json.reddit_url,\n        source_domain: item.json.source_domain,\n        upvotes: item.json.upvotes,\n        engagement_score: item.json.engagement_score,\n        \n        // ✅ STORE FULL STRATEGY (So YouTube SEO data passes downstream)\n        strategy: strategy,\n        \n        // ✅ FLATTEN KEY FIELDS FOR EASY ACCESS\n        duration: strategy.optimal_duration,\n        risk_score: strategy.risk_score,\n        risk_level: strategy.risk_level,\n        caption_short: strategy.captions.short,\n        \n        // 👇 STRIP EMOJIS: Safe for FFmpeg burn-in so the video editor never crashes\n        caption_video_safe: strategy.captions.short.replace(/[\\p{Emoji_Presentation}\\p{Extended_Pictographic}]/gu, '').replace(/\\s+/g, ' ').trim(),\n        \n        caption_long: strategy.captions.long,\n        voiceover_script: strategy.voiceover_script,\n        \n        // 👇 BULLETPROOF HASHTAGS: Safely handle arrays or strings without crashing\n        hashtags: Array.isArray(strategy.hashtags) ? strategy.hashtags.join(' ') : strategy.hashtags || '#football #viral',\n        \n        use_backup_account: !strategy.posting_strategy?.primary_account,\n        transformation_level: strategy.transformation_level || 'standard',\n        start_offset: strategy.editing?.start_offset || 0\n      }\n    });\n    \n  } catch (error) {\n    // 🗑️ FAIL-FAST: No fake fallbacks. If the AI messes up, log it and dump the video.\n    console.error(`Skipping video ${item.json.video_id || item.json.id || 'unknown'} due to AI failure:`, error.message);\n  }\n}\n\n// 🛑 SAFETY STOP: If all videos failed the AI check, halt the workflow.\nif (items.length === 0) {\n  throw new Error(\"All videos in this batch failed AI strategy parsing. Halting workflow to protect content quality.\");\n}\n\nreturn items;"
+      },
+      "id": "0894c9a5-8bf8-43c8-896d-4fcc159968ff",
+      "name": "6. Parse AI Strategy",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -6640,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "command": "rm -f /tmp/football_ai/*_original.mp4 \\\n      /tmp/football_ai/*_trimmed.mp4 \\\n      /tmp/football_ai/*_processed.mp4 \\\n      /tmp/football_ai/*_voiceover.mp3 \\\n      /tmp/football_ai/*_final.mp4 \\\n      /tmp/football_ai/background_music.mp3"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -6192,
+        592
+      ],
+      "id": "4a20cfcf-2175-4396-9db8-a2ce2f310a3f",
+      "name": "Janitor"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-5.6-sol",
+          "mode": "id"
+        },
+        "responsesApiEnabled": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -6992,
+        880
+      ],
+      "id": "d727e82e-dab9-4de7-b6c0-134f8b5c5323",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "4l5MnCO6HIqPSPKL",
+          "name": "OpenAI account 2"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Convert text to speech": {
+      "main": [
+        [
+          {
+            "node": "Save 11Labs Audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check - ElevenLab Failed?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check - ElevenLab Failed?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "9. Generate Voiceover",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save 11Labs Audio": {
+      "main": [
+        [
+          {
+            "node": "Verify 11Labs Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify 11Labs Audio": {
+      "main": [
+        [
+          {
+            "node": "9B. Parse Voiceover Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload a video": {
+      "main": [
+        [
+          {
+            "node": "YouTube Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "4. Prepare Context": {
+      "main": [
+        [
+          {
+            "node": "5. AI Strategist Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Posts": {
+      "main": [
+        [
+          {
+            "node": "Janitor",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "7. Download Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "7. Download Video": {
+      "main": [
+        [
+          {
+            "node": "8. Parse Download Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Download Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "8. Parse Download Info": {
+      "main": [
+        [
+          {
+            "node": "Convert text to speech",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9. Generate Voiceover": {
+      "main": [
+        [
+          {
+            "node": "9B. Parse Voiceover Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9B. Parse Voiceover Info": {
+      "main": [
+        [
+          {
+            "node": "9C. Download Music",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9C. Download Music": {
+      "main": [
+        [
+          {
+            "node": "9D. Parse Music",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "9D. Parse Music": {
+      "main": [
+        [
+          {
+            "node": "10. Master Video Editor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "10. Master Video Editor": {
+      "main": [
+        [
+          {
+            "node": "Waiting for video editor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Waiting for video editor": {
+      "main": [
+        [
+          {
+            "node": "11. Parse Final Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "11. Parse Final Video": {
+      "main": [
+        [
+          {
+            "node": "Log Posted Video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Posted Video": {
+      "main": [
+        [
+          {
+            "node": "Passing Through",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk2": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Passing Through": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Upload a video",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "YouTube Wait": {
+      "main": [
+        [
+          {
+            "node": "Facebook Auto-Poster",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Facebook Auto-Poster": {
+      "main": [
+        [
+          {
+            "node": "Wait3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait3": {
+      "main": [
+        [
+          {
+            "node": "🎵 TikTok - Get Byte Size",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grab Top 3": {
+      "main": [
+        [
+          {
+            "node": "4. Prepare Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Success?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Split Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "5. AI Strategist Agent": {
+      "main": [
+        [
+          {
+            "node": "6. Parse AI Strategy",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 TikTok - Get Byte Size": {
+      "main": [
+        [
+          {
+            "node": "🎵 TikTok - Init Upload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 TikTok - Init Upload": {
+      "main": [
+        [
+          {
+            "node": "🎵 TikTok - Shell Streamer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🎵 TikTok - Shell Streamer": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "Split Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1. Schedule (Every 3 Hours)": {
+      "main": [
+        [
+          {
+            "node": "1A. Reddit RSS (Free)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "1A. Reddit RSS (Free)": {
+      "main": [
+        [
+          {
+            "node": "2. Filter Reddit RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "2. Filter Reddit RSS": {
+      "main": [
+        [
+          {
+            "node": "Check Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Filter Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Items": {
+      "main": [
+        [
+          {
+            "node": "Grab Top 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "6. Parse AI Strategy": {
+      "main": [
+        [
+          {
+            "node": "Split Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "5. AI Strategist Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {}
+}
